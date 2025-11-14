@@ -1,0 +1,154 @@
+-- -----------------------------------------------------
+-- 1. ELIMINAR TABLAS EXISTENTES
+-- -----------------------------------------------------
+DROP TABLE IF EXISTS DetallesVenta;
+DROP TABLE IF EXISTS Ventas;
+DROP TABLE IF EXISTS Clientes;
+DROP TABLE IF EXISTS Productos;
+
+-- -----------------------------------------------------
+-- 2. CREACIÓN DE TABLAS (Sintaxis correcta para SQLite)
+-- -----------------------------------------------------
+CREATE TABLE Productos (
+    ProductoID INTEGER PRIMARY KEY, -- Esto soluciona el error
+    Nombre TEXT NOT NULL,
+    Descripcion TEXT,
+    Precio REAL NOT NULL,
+    Stock INTEGER NOT NULL,
+    Categoria TEXT
+);
+
+CREATE TABLE Clientes (
+    ClienteID INTEGER PRIMARY KEY,
+    Nombre TEXT NOT NULL,
+    Apellido TEXT NOT NULL,
+    Email TEXT UNIQUE NOT NULL,
+    Telefono TEXT,
+    Direccion TEXT
+);
+
+CREATE TABLE Ventas (
+    VentaID INTEGER PRIMARY KEY,
+    ClienteID INTEGER,
+    FechaVenta TEXT NOT NULL,
+    Total REAL NOT NULL,
+    MetodoPago TEXT,
+    FOREIGN KEY (ClienteID) REFERENCES Clientes(ClienteID)
+);
+
+CREATE TABLE DetallesVenta (
+    DetalleID INTEGER PRIMARY KEY,
+    VentaID INTEGER,
+    ProductoID INTEGER,
+    Cantidad INTEGER NOT NULL,
+    PrecioUnitario REAL NOT NULL,
+    Subtotal REAL NOT NULL,
+    FOREIGN KEY (VentaID) REFERENCES Ventas(VentaID),
+    FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
+);
+
+-- -----------------------------------------------------
+-- 3. INSERCIÓN DE DATOS DE EJEMPLO
+-- -----------------------------------------------------
+
+INSERT INTO Productos (Nombre, Descripcion, Precio, Stock, Categoria) VALUES
+('Balón de Fútbol', 'Balón de cuero sintético, talla 5.', 25.00, 50, 'Fútbol'),
+('Camiseta Running', 'Camiseta técnica transpirable.', 15.50, 120, 'Running');
+
+INSERT INTO Clientes (Nombre, Apellido, Email, Telefono, Direccion) VALUES
+('Ana', 'García', 'ana.garcia@ejemplo.com', '555-1234', 'Calle Sol 101');
+
+INSERT INTO Ventas (ClienteID, FechaVenta, Total, MetodoPago) VALUES
+(1, '2025-11-13', 40.50, 'Tarjeta');
+
+INSERT INTO DetallesVenta (VentaID, ProductoID, Cantidad, PrecioUnitario, Subtotal) VALUES
+(1, 2, 2, 15.50, 31.00),
+(1, 1, 1, 9.50, 9.50);
+=======================================
+
+TRIGER 
+=======================================================
+=======================================================
+CREATE TRIGGER actualizar_stock_venta
+AFTER INSERT ON DetallesVenta
+FOR EACH ROW
+BEGIN
+    -- Resta la cantidad vendida (NEW.Cantidad) del Stock del producto
+    UPDATE Productos
+    SET Stock = Stock - NEW.Cantidad
+    WHERE ProductoID = NEW.ProductoID;
+END;
+CONSULTA====
+SELECT Nombre, Stock FROM Productos WHERE ProductoID = 1
+INSERT INTO DetallesVenta (VentaID, ProductoID, Cantidad, PrecioUnitario, Subtotal) 
+VALUES (5, 1, 10, 25.00, 125.00);
+
+AÑADIR
+
+CREATE TRIGGER devolver_stock_eliminado
+AFTER DELETE ON DetallesVenta
+FOR EACH ROW
+BEGIN
+    -- Suma la cantidad eliminada (OLD.Cantidad) al Stock del producto
+    UPDATE Productos
+    SET Stock = Stock + OLD.Cantidad
+    WHERE ProductoID = OLD.ProductoID;
+END;
+
+SELECT Nombre, Stock FROM Productos WHERE ProductoID = 1;
+
+DELETE FROM DetallesVenta WHERE DetalleID = 6;
+
+
+=========================================
+Secrea una nueva tabla categorias
+-- 2. Inserta las categorías únicas de tus productos antiguos en la nueva tabla
+INSERT INTO Categorias (NombreCategoria)
+SELECT DISTINCT Categoria FROM Productos
+WHERE Categoria IS NOT NULL;
+
+-- 3. Actualiza los productos para que referencien la nueva CategoriaID
+UPDATE Productos
+SET CategoriaID = (
+    SELECT CategoriaID
+    FROM Categorias
+    WHERE Categorias.NombreCategoria = Productos.Categoria
+);
+SELECT 
+    P.Nombre, 
+    P.Categoria AS Categoria_Antigua, 
+    C.NombreCategoria AS Categoria_Nueva
+FROM 
+    Productos P
+JOIN 
+    Categorias C ON P.CategoriaID = C.CategoriaID;
+
+===============================================
+Se rerea la tabla productos y se le da la normalizacion 3f a la base de datos
+
+ALTER TABLE Productos RENAME TO Productos_old;
+
+CREATE TABLE Productos (
+    ProductoID INTEGER PRIMARY KEY,
+    Nombre TEXT NOT NULL,
+    Descripcion TEXT,
+    Precio REAL NOT NULL,
+    Stock INTEGER NOT NULL,
+    CategoriaID INTEGER, -- Nueva columna de llave foránea
+    
+    -- Definición de la Llave Foránea
+    FOREIGN KEY (CategoriaID) REFERENCES Categorias(CategoriaID)
+);
+
+INSERT INTO Productos (ProductoID, Nombre, Descripcion, Precio, Stock, CategoriaID)
+SELECT 
+    ProductoID, 
+    Nombre, 
+    Descripcion, 
+    Precio, 
+    Stock, 
+    CategoriaID 
+FROM Productos_old;
+
+PRAGMA foreign_keys = OFF; -- Ingnora la eliminacion de las tablas con llaves foraneas 
+DROP TABLE Productos_old;
